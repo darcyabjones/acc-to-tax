@@ -114,5 +114,5 @@ setup(
     #        'sample=sample:main',
     #    ],
     #},
-    scripts=["bin/catastrophy"],
+    #scripts=["bin/catastrophy"],
 )
