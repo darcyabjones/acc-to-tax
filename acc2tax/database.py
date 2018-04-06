@@ -18,6 +18,7 @@ from sqlalchemy import ForeignKey
 
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
+from sqlalchemy import and_
 
 Base = declarative_base()
 
@@ -231,6 +232,7 @@ class BaseTable(object):
 
     @staticmethod
     def sanitise_integer(integer):
+        """ Bit redundant but allows us to handle more cases in the future """
         return int(integer)
 
     @classmethod
@@ -239,6 +241,18 @@ class BaseTable(object):
             return [cls.sanitise_integer(i) for i in integers]
 
         return [cls.sanitise_integer(integers)]
+
+    @staticmethod
+    def sanitise_string(string):
+        """ Bit redundant but allows us to handle more cases in the future """
+        return str(string)
+
+    @classmethod
+    def sanitise_strings(cls, strings):
+        if isinstance(strings, Iterable) and not isinstance(strings, str):
+            return [cls.sanitise_string(s) for s in strings]
+
+        return [cls.sanitise_string(strings)]
 
     @classmethod
     def _separate_objs(cls, objs):
@@ -271,6 +285,22 @@ class BaseTable(object):
 
         return "{}({})".format(prefix, ", ".join(args))
 
+
+    def __str__(self):
+        args = list()
+        try:
+            important_cols = self.important_cols
+        except AttributeError:
+            important_cols = [c[0] for c in self.columns]
+
+        for colname in important_cols:
+            value = getattr(self, colname)
+
+            if colname == 'rank':
+                value = "'{}'".format(value)
+
+            args.append("{}: {}".format(colname, value))
+        return ", ".join(args)
 
 
 
@@ -373,6 +403,9 @@ class Nodes(BaseTable, Base):
         ("comments", str, str)
         ]
 
+    # These are the columns displayed in __str__
+    important_cols = ['taxid', 'parent_taxid', 'rank']
+
     # The file delimiter for the text file.
     sep = "\t|\t"
     end = "\t|\n"
@@ -386,7 +419,6 @@ class Nodes(BaseTable, Base):
         taxids = cls.sanitise_integers(taxids)
 
         return cls.get_records("taxid", taxids, session=session)
-
 
     @classmethod
     def get_parents(cls, nodes, rank=None, session=None):
@@ -445,17 +477,6 @@ class Nodes(BaseTable, Base):
 
         return recurse(taxids, seen)
 
-    def __str__(self):
-        important_cols = ['taxid', 'parent_taxid', 'rank']
-        args = list()
-        for colname in important_cols:
-            value = getattr(self, colname)
-
-            if colname == 'rank':
-                value = "'{}'".format(value)
-
-            args.append("{}: {}".format(colname, value))
-        return ", ".join(args)
 
 class Names(BaseTable, Base):
     """ Table schema for "names.dmp" from taxdmp folder
@@ -487,6 +508,41 @@ class Names(BaseTable, Base):
     sep = "\t|\t"
     end = "\t|\n"
     header = False
+
+    @classmethod
+    def get_taxids(cls, taxids, name_class=None, max_search_rows=None, session=None):
+        """ Finds a rows given a taxid """
+
+        session = cls.get_session(session)
+        taxids = cls.sanitise_integers(taxids)
+        if max_search_rows is None:
+            max_search_rows = cls.max_search_rows
+
+        if name_class is not None:
+            name_class = cls.sanitise_strings(name_class)
+
+        results = list()
+
+        for i in range(0, len(taxids), max_search_rows):
+            j = i + max_search_rows
+
+            taxid_filter = cls.taxid.in_(taxids[i:j])
+
+            if name_class is not None:
+                nc_filter = cls.name_class.in_(name_class)
+
+                total_filter = and_(taxid_filter, nc_filter)
+            else:
+                total_filter = taxid_filter
+
+            these_results = cls.filter(
+                statement=total_filter,
+                columns=None,
+                session=session,
+                ).all()
+            results.extend(these_results)
+
+        return results
 
 
 class Division(BaseTable, Base):
