@@ -608,7 +608,7 @@ class GenCode(BaseTable, Base):
 
 def main(db, nodes, names, division, debug=False):
     engine = create_engine(db, echo=False)
-
+    Base.metadata.create_all(engine)
     with session_scope(engine) as session:
         Nodes.from_file(nodes, session=session)
         Names.from_file(names, session=session)
@@ -630,21 +630,18 @@ def cli(args=sys.argv):
 
     arg_parser.add_argument(
         "-n", "--nodes",
-        default="nodes.dmp",
         help=(
             "Path to the nodes database file."
             )
         )
     arg_parser.add_argument(
         "-a", "--names",
-        default="names.dmp",
         help=(
             "Path to the names database file."
             )
         )
     arg_parser.add_argument(
         "-e", "--division",
-        default='division.dmp',
         help="Path to the divisions database file."
         )
     arg_parser.add_argument(
