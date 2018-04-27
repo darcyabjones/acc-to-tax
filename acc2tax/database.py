@@ -1,13 +1,18 @@
 """
-Functions to count the number of specific classes of CAZymes.
+Templates to store NCBI taxonomy files in sql database.
 """
-
 from __future__ import unicode_literals
 
+version = "0.0.1"
+
+
+import sys
 import re
 import logging
+import argparse
 from collections import defaultdict
 from collections import Iterable
+from contextlib import contextmanager
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.declarative import declared_attr
@@ -26,16 +31,18 @@ logger = logging.getLogger(__name__)
 logger.debug("Loaded module: `database`")
 
 
-def create_session(target="sqlite:///:memory:", echo=False):
-    """ Creates an sql session to use for sqlalchemy.
-
-    returns a tuple of session, engine
-    """
-
-    engine = create_engine(target, echo=echo)
+@contextmanager
+def session_scope(engine):
+    """Provide a transactional scope around a series of operations."""
     session = sessionmaker(engine)()
-
-    return session, engine
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 def int2bool(x):
     """ Converts integer strings to boolean objects. """
@@ -597,3 +604,65 @@ class GenCode(BaseTable, Base):
     name = Column(String)
     cde = Column(String)
     starts = Column(String)
+
+
+def main(db, nodes, names, division, debug=False):
+    engine = create_engine(db, echo=False)
+
+    with session_scope(engine) as session:
+        Nodes.from_file(nodes, session=session)
+        Names.from_file(names, session=session)
+        Division.from_file(division, session=session)
+    return
+
+def cli(args=sys.argv):
+    arg_parser = argparse.ArgumentParser(
+        description="test",
+        epilog=(
+            'Example usage:\n'
+            )
+        )
+    arg_parser.add_argument(
+        "-d", "--db",
+        default="sqlite:///db.sqlite",
+        help="The address to the database to write to."
+        )
+
+    arg_parser.add_argument(
+        "-n", "--nodes",
+        default="nodes.dmp",
+        help=(
+            "Path to the nodes database file."
+            )
+        )
+    arg_parser.add_argument(
+        "-a", "--names",
+        default="names.dmp",
+        help=(
+            "Path to the names database file."
+            )
+        )
+    arg_parser.add_argument(
+        "-e", "--division",
+        default='division.dmp',
+        help="Path to the divisions database file."
+        )
+    arg_parser.add_argument(
+        "--debug",
+        default=False,
+        action='store_true',
+        help='Display debug information about compiled expression.',
+        )
+    arg_parser.add_argument(
+        '--version',
+        action='version',
+        version='%(prog)s {}'.format(version),
+        )
+
+
+    args = arg_parser.parse_args()
+    main(**args.__dict__)
+
+
+if __name__ == '__main__':
+    cli()
