@@ -112,6 +112,7 @@ setup(
     entry_points={
         'console_scripts': [
             'a2t-load=acc2tax.database:cli',
+            'a2t-tids=acc2tax.acclist:main',
         ],
     },
     #scripts=["bin/catastrophy"],
